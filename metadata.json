@@ -1,0 +1,5 @@
+{
+  "name": "Elastic Prism",
+  "description": "A professional-grade audio visualization suite with real-time frequency analysis, customizable visual engines, and AI-enhanced themes.",
+  "requestFramePermissions": ["microphone", "camera"]
+}
