@@ -3,11 +3,10 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
-export default defineConfig(({mode}) => {
+export default defineConfig(({mode, command}) => {
   const env = loadEnv(mode, '.', '');
-  // GitHub Pages: https://<user>.github.io/<repo>/ — GITHUB_REPOSITORY is set in Actions
-  const repo = process.env.GITHUB_REPOSITORY?.split('/')[1];
-  const base = repo ? `/${repo}/` : '/';
+  // Dev: /. Build: ./ so assets work on github.io/.../elastic-prism/ AND on custom domain root.
+  const base = command === 'serve' ? '/' : './';
   return {
     base,
     plugins: [react(), tailwindcss()],
