@@ -183,8 +183,6 @@ export default function App() {
   });
   const [isMicActive, setIsMicActive] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   // handPos as ref ONLY (no React re-render on hand move)
   const handPosRef = useRef<HandUpdate | null>(null);
@@ -525,39 +523,6 @@ export default function App() {
         currentTime: audioRef.current?.currentTime || 0,
         duration: audioRef.current?.duration || 0,
       }));
-    }
-  };
-
-  const runAiAnalysis = async () => {
-    if (isAnalyzing) return;
-    if (!process.env.GEMINI_API_KEY) {
-      setAiAnalysis('Set GEMINI_API_KEY in .env.local to enable AI features.');
-      return;
-    }
-    setIsAnalyzing(true);
-    try {
-      // Dynamic import — only loads when AI is actually used
-      const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: `You are an expert music visualizer designer.
-        The user is using mode "${settings.mode}" with primary color ${settings.colorPrimary}, secondary ${settings.colorSecondary}.
-        Effects: bloom=${settings.bloom}, glitch=${settings.glitch}, feedback=${settings.feedback}, vignette=${settings.vignette}.
-        Intensity: ${settings.masterIntensity}, BeatSync: ${settings.beatSync}.
-        Suggest a creative name and a 1-sentence poetic description. Also suggest optimized settings.
-        Return as JSON: { "name": "...", "description": "...", "suggestedSettings": { "colorPrimary": "...", "colorSecondary": "...", "bloom": true/false, "intensity": 0-2, "feedback": true/false } }`,
-        config: { responseMimeType: "application/json" }
-      });
-
-      const responseText = response.text;
-      if (!responseText) throw new Error('Empty AI response');
-      const data = JSON.parse(responseText);
-      setAiAnalysis(JSON.stringify(data));
-    } catch (err) {
-      console.error("AI Analysis failed", err);
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
@@ -1901,10 +1866,10 @@ export default function App() {
                       sweepPosRef.current = 0;
                       recordLiveActionMarker('clear');
                     }, 'bg-white/10 border-white/20 text-white/70'],
-                  ].map(([label, onClick, cls]) => (
+                  ].map(([label, onClick, cls]: [string, () => void, string]) => (
                     <button
-                      key={String(label)}
-                      onClick={onClick as () => void}
+                      key={label}
+                      onClick={onClick}
                       className={`py-1.5 rounded border text-[8px] font-bold uppercase tracking-wider ${cls}`}
                     >
                       {label}
@@ -2152,41 +2117,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
-            {/* Overlay Info */}
-            {aiAnalysis && (() => {
-              let parsed: { name?: string; description?: string; suggestedSettings?: Partial<VisualizerSettings> } | null = null;
-              try { parsed = JSON.parse(aiAnalysis); } catch { /* fallback to raw text */ }
-              return (
-                <div className="absolute bottom-8 left-8 p-4 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl max-w-md z-20">
-                  {parsed ? (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-bold text-white">{parsed.name}</h3>
-                      <p className="text-sm text-white/70 italic">{parsed.description}</p>
-                      {parsed.suggestedSettings && (
-                        <button
-                          onClick={() => {
-                            handleApplyPreset(parsed!.suggestedSettings!);
-                            setAiAnalysis(null);
-                          }}
-                          className="mt-2 px-4 py-1.5 bg-white/10 border border-white/20 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-white/20 transition-colors"
-                        >
-                          Apply Settings
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-white/80 leading-relaxed italic">{aiAnalysis}</div>
-                  )}
-                  <button
-                    onClick={() => setAiAnalysis(null)}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-white text-black rounded-full flex items-center justify-center text-[10px] font-bold"
-                  >
-                    x
-                  </button>
-                </div>
-              );
-            })()}
 
             {/* Share Notification */}
             {shareNotification && (
