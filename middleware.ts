@@ -11,9 +11,9 @@ export const config = {
 
 const COOKIE_NAME = 'eu-auth';
 
-export default function middleware(request: Request): Response {
+export default function middleware(request: Request): Response | undefined {
   const password = (process.env.SITE_PASSWORD || '').trim();
-  if (!password) return fetch(request) as unknown as Response;
+  if (!password) return;
 
   // Skip static assets
   const url = new URL(request.url);
@@ -27,13 +27,13 @@ export default function middleware(request: Request): Response {
     path.endsWith('.ico') ||
     path.endsWith('.woff2')
   ) {
-    return fetch(request) as unknown as Response;
+    return;
   }
 
   // Check auth cookie
   const cookies = request.headers.get('cookie') || '';
   const hasAuth = cookies.split(';').some(c => c.trim().startsWith(`${COOKIE_NAME}=granted`));
-  if (hasAuth) return fetch(request) as unknown as Response;
+  if (hasAuth) return;
 
   // Check password submission
   const submitted = url.searchParams.get('password');
