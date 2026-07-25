@@ -1,7 +1,7 @@
 {
   "name": "Elastic Prism Pro",
   "short_name": "Prism",
-  "description": "Browser-native audio-visual experience with 21 visualization modes",
+  "description": "Browser-native audio-visual experience with 30 visualization modes",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A0A14",

@@ -187,7 +187,6 @@ export default function App() {
   // handPos as ref ONLY (no React re-render on hand move)
   const handPosRef = useRef<HandUpdate | null>(null);
   const setHandPos = useCallback((hp: HandUpdate | null) => { handPosRef.current = hp; }, []);
-  const handPos = handPosRef.current; // read once per render
   const [shareNotification, setShareNotification] = useState(false);
   const [detectedKey, setDetectedKey] = useState('');
   const [transitionPhase, setTransitionPhase] = useState('');
@@ -228,8 +227,7 @@ export default function App() {
   liveAutoZoomSpeedRef.current = liveAutoZoomSpeed;
   const visualTransitionStartRef = useRef(0);
   // mousePos as ref ONLY (no React re-render on mouse move)
-  const mousePosStateRef = useRef({ x: 0.5, y: 0.5 });
-  const mousePos = mousePosStateRef.current;
+  const mousePosRef = useRef({ x: 0.5, y: 0.5 });
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
@@ -320,11 +318,11 @@ export default function App() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       // Write to ref directly (no React re-render)
-      mousePosStateRef.current = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight };
+      mousePosRef.current = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight };
     };
     const handleTouchMove = (e: TouchEvent) => {
       const t = e.touches[0];
-      if (t) mousePosStateRef.current = { x: t.clientX / window.innerWidth, y: t.clientY / window.innerHeight };
+      if (t) mousePosRef.current = { x: t.clientX / window.innerWidth, y: t.clientY / window.innerHeight };
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
@@ -814,35 +812,41 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Mount once - reads everything via refs
 
-  // Gesture control handlers
+  // Gesture control — read handPosRef every frame (props would be stale without re-renders)
   const lastGestureRef = useRef<HandGesture>('none');
   useEffect(() => {
-    if (!handPos || !settings.gestureControl) return;
-    const gesture = handPos.gesture;
-    const prevGesture = lastGestureRef.current;
+    let raf = 0;
+    const tick = () => {
+      if (settingsLiveRef.current.gestureControl) {
+        const handPos = handPosRef.current;
+        if (handPos) {
+          const gesture = handPos.gesture;
+          const prevGesture = lastGestureRef.current;
 
-    // Only trigger on gesture change (not every frame)
-    if (gesture !== prevGesture) {
-      if (gesture === 'pinch') {
-        // Pinch controls master intensity
-      } else if (gesture === 'fist' && prevGesture !== 'fist') {
-        setIsZenMode(prev => !prev);
-      } else if (gesture === 'open_palm' && prevGesture !== 'open_palm') {
-        handleTogglePlay();
-      } else if (gesture === 'wave' && prevGesture !== 'wave') {
-        handleNextTrack();
+          if (gesture !== prevGesture) {
+            if (gesture === 'fist' && prevGesture !== 'fist') {
+              setIsZenMode(prev => !prev);
+            } else if (gesture === 'open_palm' && prevGesture !== 'open_palm') {
+              handleTogglePlay();
+            } else if (gesture === 'wave' && prevGesture !== 'wave') {
+              handleNextTrack();
+            }
+            lastGestureRef.current = gesture;
+          }
+
+          if (gesture === 'pinch') {
+            engineOverridesRef.current = {
+              ...engineOverridesRef.current,
+              masterIntensity: Math.max(0.1, Math.min(3, 0.5 + handPos.pinchDistance * 1.5)),
+            };
+          }
+        }
       }
-      lastGestureRef.current = gesture;
-    }
-
-    // Continuous: pinch distance controls intensity (via engine ref, no state update)
-    if (gesture === 'pinch') {
-      engineOverridesRef.current = {
-        ...engineOverridesRef.current,
-        masterIntensity: Math.max(0.1, Math.min(3, 0.5 + handPos.pinchDistance * 1.5)),
-      };
-    }
-  }, [handPos, settings.gestureControl]);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [handleTogglePlay, handleNextTrack]);
 
   // Load settings from URL hash on startup
   useEffect(() => {
@@ -1447,10 +1451,10 @@ export default function App() {
     // Ensure sub-visualizers receive the actual requested mode (important for shader layer 2).
     const s = merged.mode === mode ? merged : { ...merged, mode };
     const eo = engineOverridesRef;
-    if (mode === 'prism3d') return <Visualizer3D getFrequencyData={getFreqDataCb} settings={s} mousePos={mousePos} handPos={handPos} engineOverrides={eo} />;
-    if (mode === 'cyberflow') return <CyberflowVisualizer getFrequencyData={getFreqDataCb} settings={s} mousePos={mousePos} handPos={handPos} engineOverrides={eo} />;
-    if (SHADER_MODES.includes(mode)) return <ShaderVisualizer getFrequencyData={getFreqDataCb} settings={s} mousePos={mousePos} handPos={handPos} engineOverrides={eo} />;
-    return <VisualizerCanvas getFrequencyData={getFreqDataCb} getTimeDomainData={getTimeDataCb} settings={s} mousePos={mousePos} handPos={handPos} engineOverrides={eo} />;
+    if (mode === 'prism3d') return <Visualizer3D getFrequencyData={getFreqDataCb} settings={s} mousePosRef={mousePosRef} handPosRef={handPosRef} engineOverrides={eo} />;
+    if (mode === 'cyberflow') return <CyberflowVisualizer getFrequencyData={getFreqDataCb} settings={s} mousePosRef={mousePosRef} handPosRef={handPosRef} engineOverrides={eo} />;
+    if (SHADER_MODES.includes(mode)) return <ShaderVisualizer getFrequencyData={getFreqDataCb} settings={s} mousePosRef={mousePosRef} handPosRef={handPosRef} engineOverrides={eo} />;
+    return <VisualizerCanvas getFrequencyData={getFreqDataCb} getTimeDomainData={getTimeDataCb} settings={s} mousePosRef={mousePosRef} handPosRef={handPosRef} engineOverrides={eo} />;
   };
 
   return (
@@ -1492,16 +1496,7 @@ export default function App() {
                     }`}>{m === 'kaleidoscope' ? 'kaleido' : m === 'metaballs' ? 'liquid' : m === 'starfield' ? 'stars' : m === 'particles' ? 'nebula' : m === 'territory' ? 'terrwar' : m === 'grid_warp' ? 'gridwarp' : m === 'chrysanthemum' ? 'flower' : m === 'oscilloscope' ? 'scope' : m}</button>
                 ))}
 
-                {/* Shader / Advanced Visuals */}
-                <div className="px-2 mt-3 mb-1">
-                  <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#8B6914]/60">Shader Visuals</span>
-                </div>
-                {(['fractal_zoom', 'fluid_sim', 'aurora', 'quantum_field', 'neural_net', 'glitch_city', 'cosmic_web', 'electric_storm', 'cyberflow', 'prism3d'] as const).map(m => (
-                  <button key={m} onClick={() => handleSettingChange('mode', m)}
-                    className={`w-full text-left px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all ${
-                      settings.mode === m ? 'bg-[#8B6914]/20 text-[#D4A537] border-l-2 border-[#D4A537]' : 'text-white/40 hover:bg-white/5 hover:text-white/60 border-l-2 border-transparent'
-                    }`}>{m === 'fractal_zoom' ? 'fractal' : m === 'fluid_sim' ? 'fluid' : m === 'quantum_field' ? 'quantum' : m === 'neural_net' ? 'neural' : m === 'glitch_city' ? 'glitch' : m === 'cosmic_web' ? 'cosmic' : m === 'electric_storm' ? 'storm' : m === 'cyberflow' ? 'cyber' : m === 'prism3d' ? '3d prism' : m}</button>
-                ))}
+                {/* Shader / Advanced Visuals — duplicate block removed */}
               </div>
 
               {/* Transport at bottom of left panel */}
@@ -1544,7 +1539,7 @@ export default function App() {
                   {settings.ndiOutputEnabled && (
                     <div className="flex items-center gap-2 px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                      <span className="text-[8px] font-bold text-green-400 uppercase tracking-widest">NDI Out</span>
+                      <span className="text-[8px] font-bold text-green-400 uppercase tracking-widest">Canvas Stream</span>
                     </div>
                   )}
                   {isRecording && (
@@ -2161,7 +2156,6 @@ export default function App() {
                 onReset={handleReset}
                 getFrequencyData={getFreqDataCb}
                 getTimeDomainData={getTimeDataCb}
-                mousePos={mousePos}
                 autoPresetEnabled={autoPresetEnabled}
                 autoPresetInterval={autoPresetInterval}
                 onAutoPresetToggle={() => { setAutoPresetEnabled(p => !p); lastAutoPresetTimeRef.current = Date.now() / 1000; }}

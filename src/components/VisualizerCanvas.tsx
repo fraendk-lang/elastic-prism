@@ -18,8 +18,8 @@ interface VisualizerCanvasProps {
   getFrequencyData: () => Uint8Array;
   getTimeDomainData: () => Uint8Array;
   settings: VisualizerSettings;
-  mousePos: { x: number; y: number };
-  handPos?: HandUpdate | null;
+  mousePosRef: React.RefObject<{ x: number; y: number }>;
+  handPosRef: React.RefObject<HandUpdate | null>;
   engineOverrides?: React.MutableRefObject<Partial<VisualizerSettings>>;
 }
 
@@ -27,8 +27,8 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
   getFrequencyData,
   getTimeDomainData,
   settings,
-  mousePos,
-  handPos,
+  mousePosRef,
+  handPosRef,
   engineOverrides,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,10 +47,6 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
   // Store props in refs so the render loop always reads latest values without re-mounting
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  const mousePosRef = useRef(mousePos);
-  mousePosRef.current = mousePos;
-  const handPosRef = useRef(handPos);
-  handPosRef.current = handPos;
   const getFreqRef = useRef(getFrequencyData);
   getFreqRef.current = getFrequencyData;
   const getTimeRef = useRef(getTimeDomainData);

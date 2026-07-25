@@ -32,7 +32,7 @@ interface AudioControlsProps {
   onReset: () => void;
   getFrequencyData: () => Uint8Array;
   getTimeDomainData: () => Uint8Array;
-  mousePos: { x: number; y: number };
+  mousePos?: { x: number; y: number };
   // Auto Presets
   autoPresetEnabled: boolean;
   autoPresetInterval: number;
@@ -125,7 +125,7 @@ const FX_BUTTONS = [
   { id: 'vignette', label: 'Vign' }, { id: 'mirror', label: 'Mirr' }, { id: 'fluidParticlesEnabled', label: 'Part' },
   { id: 'textOverlayEnabled', label: 'TxtOv' },
   { id: 'automationEnabled', label: 'Auto' }, { id: 'strobeEnabled', label: 'Strb' }, { id: 'harmonicColorEnabled', label: 'Harm' },
-  { id: 'transitionMorphEnabled', label: 'Morph' }, { id: 'ndiOutputEnabled', label: 'NDI' },
+  { id: 'transitionMorphEnabled', label: 'Morph' }, { id: 'ndiOutputEnabled', label: 'Stream' },
   { id: 'sweepEnabled', label: 'Swp' }, { id: 'lfoEnabled', label: 'LFO' },
 ] as const;
 
@@ -648,11 +648,16 @@ const ExportSection = React.memo<{
       </div>
     </div>
     <div className="flex gap-1">
-      {(['720p', '1080p', '4k'] as const).map(q => (
-        <button key={q} onClick={() => onExportQualityChange(q)}
+      {([
+        { id: '720p', label: 'Low' },
+        { id: '1080p', label: 'Med' },
+        { id: '4k', label: 'High' },
+      ] as const).map(({ id, label }) => (
+        <button key={id} onClick={() => onExportQualityChange(id)}
+          title={`${label} bitrate · exports at current canvas size`}
           className={`flex-1 py-1 rounded text-[8px] font-bold uppercase transition-all ${
-            exportQuality === q ? 'bg-[#8B6914]/30 text-[#D4A537] border border-[#8B6914]/50' : 'bg-white/5 text-white/30 hover:bg-white/10 border border-transparent'
-          }`}>{q}</button>
+            exportQuality === id ? 'bg-[#8B6914]/30 text-[#D4A537] border border-[#8B6914]/50' : 'bg-white/5 text-white/30 hover:bg-white/10 border border-transparent'
+          }`}>{label}</button>
       ))}
     </div>
     <div className="flex gap-1">

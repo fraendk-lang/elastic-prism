@@ -21,25 +21,21 @@ import { VisualizerSettings, HandUpdate } from '../types';
 interface Visualizer3DProps {
   getFrequencyData: () => Uint8Array;
   settings: VisualizerSettings;
-  mousePos: { x: number; y: number };
-  handPos?: HandUpdate | null;
+  mousePosRef: React.RefObject<{ x: number; y: number }>;
+  handPosRef: React.RefObject<HandUpdate | null>;
   engineOverrides?: React.MutableRefObject<Partial<VisualizerSettings>>;
 }
 
 export const Visualizer3D: React.FC<Visualizer3DProps> = ({
   getFrequencyData,
   settings,
-  mousePos,
-  handPos,
+  mousePosRef,
+  handPosRef,
   engineOverrides,
 }) => {
   const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg|OPR|Brave|CriOS/.test(navigator.userAgent);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  const mousePosRef = useRef(mousePos);
-  mousePosRef.current = mousePos;
-  const handPosRef = useRef(handPos);
-  handPosRef.current = handPos;
   const getFreqRef = useRef(getFrequencyData);
   getFreqRef.current = getFrequencyData;
 
