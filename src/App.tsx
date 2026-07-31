@@ -959,7 +959,13 @@ export default function App() {
   // Intercept setting changes when timeline recording is active
   const handleSettingChangeWithTimeline = useCallback((key: keyof VisualizerSettings, value: VisualizerSettings[keyof VisualizerSettings]) => {
     if (key === 'mode') {
-      startVisualTransition(value as VisualizerMode);
+      const nextMode = value as VisualizerMode;
+      const isShaderSwitch =
+        SHADER_MODES.includes(settingsLiveRef.current.mode) &&
+        SHADER_MODES.includes(nextMode);
+      if (!isShaderSwitch) {
+        startVisualTransition(nextMode);
+      }
     }
     // Always apply the change
     (settingsLiveRef.current as unknown as Record<string, unknown>)[key] = value;
