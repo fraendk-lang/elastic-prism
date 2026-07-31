@@ -151,6 +151,13 @@ const DEFAULT_SETTINGS: VisualizerSettings = {
   fadeOutDuration: 2,
 };
 
+function applyPresetSettings(
+  target: VisualizerSettings,
+  preset: Partial<VisualizerSettings>,
+): void {
+  Object.assign(target, { ...DEFAULT_SETTINGS, ...preset });
+}
+
 export default function App() {
   // CORE ARCHITECTURE: Settings live in a ref, NOT in React state.
   // React state syncs ONLY when dirty (user changed something) — never on a blind timer.
@@ -746,8 +753,7 @@ export default function App() {
             lastFiredMarkerRef.current = marker.id;
 
             if (marker.type === 'preset' && marker.preset) {
-              // Apply preset via ref (no cooldown during timeline playback)
-              Object.assign(settingsLiveRef.current, marker.preset);
+              applyPresetSettings(settingsLiveRef.current, marker.preset);
               settingsDirtyRef.current = true;
               // Schedule sync outside the interval
               requestAnimationFrame(() => {
@@ -792,9 +798,8 @@ export default function App() {
           } while (idx === lastAutoPresetIndexRef.current && PRESETS.length > 1);
           lastAutoPresetIndexRef.current = idx;
           const preset = PRESETS[idx].settings;
-          // Apply preset via ref (same as timeline playback — no cooldown conflict)
-          presetCooldownRef.current = Date.now() + 300;
-          Object.assign(settingsLiveRef.current, preset);
+          presetCooldownRef.current = Date.now() + 600;
+          applyPresetSettings(settingsLiveRef.current, preset);
           settingsDirtyRef.current = true;
           requestAnimationFrame(() => {
             if (settingsDirtyRef.current) {
@@ -973,12 +978,11 @@ export default function App() {
   }, [syncSettingsToUI, addTimelineMarker, startVisualTransition]);
 
   const handleApplyPresetWithTimeline = useCallback((preset: Partial<VisualizerSettings>) => {
-    if (preset.mode) {
-      startVisualTransition(preset.mode);
-    }
-    presetCooldownRef.current = Date.now() + 300;
+    // Instant cut for presets — dual-render + shader compile causes hangs
+    const cooldownMs = preset.mode && SHADER_MODES.includes(preset.mode) ? 800 : 500;
+    presetCooldownRef.current = Date.now() + cooldownMs;
     engineOverridesRef.current = {};
-    Object.assign(settingsLiveRef.current, preset);
+    applyPresetSettings(settingsLiveRef.current, preset);
     settingsDirtyRef.current = true;
     syncSettingsToUI();
 

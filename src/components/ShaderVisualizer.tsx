@@ -634,6 +634,58 @@ const shaders: Record<string, string> = {
 
 export const SHADER_MODES: VisualizerMode[] = ['fractal_zoom', 'fluid_sim', 'aurora', 'quantum_field', 'neural_net', 'glitch_city', 'cosmic_web', 'electric_storm'];
 
+const shaderMaterialPool = new Map<string, THREE.ShaderMaterial>();
+
+function createShaderMaterial(mode: string, width: number, height: number): THREE.ShaderMaterial {
+  const fragmentShader = shaders[mode];
+  if (!fragmentShader) {
+    throw new Error(`Unknown shader mode: ${mode}`);
+  }
+  return new THREE.ShaderMaterial({
+    vertexShader,
+    fragmentShader,
+    uniforms: {
+      time: { value: 0 },
+      resolution: { value: new THREE.Vector2(width, height) },
+      colorPrimary: { value: new THREE.Color('#D4A537') },
+      colorSecondary: { value: new THREE.Color('#1a1a1a') },
+      intensity: { value: 1 },
+      bass: { value: 0 },
+      mid: { value: 0 },
+      high: { value: 0 },
+      kick: { value: 0 },
+      mouse: { value: new THREE.Vector2(0.5, 0.5) },
+      geoScale: { value: 1.0 },
+      geoTurbulence: { value: 0.0 },
+      geoComplexity: { value: 1.0 },
+      geoSymmetry: { value: 1.0 },
+    },
+  });
+}
+
+function getPooledMaterial(mode: string, width: number, height: number): THREE.ShaderMaterial {
+  let material = shaderMaterialPool.get(mode);
+  if (!material) {
+    material = createShaderMaterial(mode, width, height);
+    shaderMaterialPool.set(mode, material);
+  }
+  material.uniforms.resolution.value.set(width, height);
+  return material;
+}
+
+function warmShaderPool(width: number, height: number): void {
+  const warm = () => {
+    for (const mode of SHADER_MODES) {
+      getPooledMaterial(mode, width, height);
+    }
+  };
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(warm, { timeout: 4000 });
+  } else {
+    setTimeout(warm, 500);
+  }
+}
+
 export const ShaderVisualizer: React.FC<ShaderVisualizerProps> = ({
   getFrequencyData,
   settings,
@@ -658,60 +710,34 @@ export const ShaderVisualizer: React.FC<ShaderVisualizerProps> = ({
   } | null>(null);
   const kickPrev = useRef(0);
   const kickEnergy = useRef(0);
+  const modeRef = useRef(settings.mode);
+  modeRef.current = settings.mode;
 
+  // Mount once: renderer, scene, animation loop
   useEffect(() => {
     if (!containerRef.current) return;
-    const fragmentShader = shaders[settings.mode];
-    if (!fragmentShader) return;
 
     const width = containerRef.current.clientWidth;
     const height = containerRef.current.clientHeight;
 
-    // REUSE WebGL renderer (prevents context exhaustion)
     let renderer = rendererRef.current;
     if (!renderer) {
       renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
-      // Chrome is notably heavier at high DPR with shader-heavy scenes.
       renderer.setPixelRatio(isChrome ? 1 : Math.min(window.devicePixelRatio, 2));
       rendererRef.current = renderer;
       containerRef.current.appendChild(renderer.domElement);
     }
     renderer.setSize(width, height);
 
-    // Dispose old scene objects
-    if (sceneRef.current) {
-      sceneRef.current.material.dispose();
-      sceneRef.current.mesh.geometry.dispose();
-    }
-
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
     const geometry = new THREE.PlaneGeometry(2, 2);
-    const material = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      uniforms: {
-        time: { value: 0 },
-        resolution: { value: new THREE.Vector2(width, height) },
-        colorPrimary: { value: new THREE.Color(settings.colorPrimary) },
-        colorSecondary: { value: new THREE.Color(settings.colorSecondary) },
-        intensity: { value: settings.masterIntensity },
-        bass: { value: 0 },
-        mid: { value: 0 },
-        high: { value: 0 },
-        kick: { value: 0 },
-        mouse: { value: new THREE.Vector2(0.5, 0.5) },
-        geoScale: { value: 1.0 },
-        geoTurbulence: { value: 0.0 },
-        geoComplexity: { value: 1.0 },
-        geoSymmetry: { value: 1.0 },
-      },
-    });
-
+    const material = getPooledMaterial(modeRef.current, width, height);
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
     sceneRef.current = { scene, camera, material, mesh };
+
+    warmShaderPool(width, height);
 
     const handleResize = () => {
       if (!containerRef.current || !sceneRef.current) return;
@@ -728,7 +754,7 @@ export const ShaderVisualizer: React.FC<ShaderVisualizerProps> = ({
       const r = rendererRef.current;
       const { scene: s, camera: c, material: m } = sceneRef.current;
 
-      const settings = engineOverrides?.current
+      const liveSettings = engineOverrides?.current
         ? { ...settingsRef.current, ...engineOverrides.current } as VisualizerSettings
         : settingsRef.current;
       const mousePos = mousePosRef.current;
@@ -747,27 +773,26 @@ export const ShaderVisualizer: React.FC<ShaderVisualizerProps> = ({
       const mid = freqData.length > 100 ? freqData.slice(30, 100).reduce((a, b) => a + b, 0) / (70 * 255) : 0;
       const high = freqData.length > 200 ? freqData.slice(100, 200).reduce((a, b) => a + b, 0) / (100 * 255) : 0;
 
-      // Kick detection
       const kickDelta = bass - kickPrev.current;
       kickPrev.current = bass;
       if (kickDelta > 0.06) kickEnergy.current = Math.min(1, kickDelta * 6);
       kickEnergy.current *= 0.82;
 
-      m.uniforms.time.value += 0.016 * settings.speed;
+      m.uniforms.time.value += 0.016 * liveSettings.speed;
       m.uniforms.bass.value = bass;
       m.uniforms.mid.value = mid;
       m.uniforms.high.value = high;
       m.uniforms.kick.value = kickEnergy.current;
-      m.uniforms.intensity.value = settings.masterIntensity;
-      m.uniforms.colorPrimary.value.set(settings.colorPrimary);
-      m.uniforms.colorSecondary.value.set(settings.colorSecondary);
-      m.uniforms.geoScale.value = settings.geoScale;
-      m.uniforms.geoTurbulence.value = settings.geoTurbulence;
-      m.uniforms.geoComplexity.value = settings.geoComplexity;
-      m.uniforms.geoSymmetry.value = settings.geoSymmetry;
+      m.uniforms.intensity.value = liveSettings.masterIntensity;
+      m.uniforms.colorPrimary.value.set(liveSettings.colorPrimary);
+      m.uniforms.colorSecondary.value.set(liveSettings.colorSecondary);
+      m.uniforms.geoScale.value = liveSettings.geoScale;
+      m.uniforms.geoTurbulence.value = liveSettings.geoTurbulence;
+      m.uniforms.geoComplexity.value = liveSettings.geoComplexity;
+      m.uniforms.geoSymmetry.value = liveSettings.geoSymmetry;
 
-      const activeX = (settings.gestureControl && handPos?.active) ? handPos.x : mousePos.x;
-      const activeY = (settings.gestureControl && handPos?.active) ? handPos.y : mousePos.y;
+      const activeX = (liveSettings.gestureControl && handPos?.active) ? handPos.x : mousePos.x;
+      const activeY = (liveSettings.gestureControl && handPos?.active) ? handPos.y : mousePos.y;
       m.uniforms.mouse.value.set(activeX, 1.0 - activeY);
 
       r.render(s, c);
@@ -779,11 +804,23 @@ export const ShaderVisualizer: React.FC<ShaderVisualizerProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      // DON'T dispose renderer - reused across mode switches
-      // Only dispose on full unmount (handled by parent)
+      sceneRef.current?.mesh.geometry.dispose();
+      sceneRef.current = null;
     };
-  // Only remount when shader mode changes (different GLSL program needed)
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Swap pooled material when mode changes — no sync recompile on main thread
+  useEffect(() => {
+    if (!containerRef.current || !sceneRef.current) return;
+    const fragmentShader = shaders[settings.mode];
+    if (!fragmentShader) return;
+
+    const width = containerRef.current.clientWidth;
+    const height = containerRef.current.clientHeight;
+    const material = getPooledMaterial(settings.mode, width, height);
+    sceneRef.current.mesh.material = material;
+    sceneRef.current.material = material;
   }, [settings.mode]);
 
   return <div ref={containerRef} className="w-full h-full" />;
