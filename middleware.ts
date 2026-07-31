@@ -109,8 +109,10 @@ export default async function middleware(request: Request): Promise<Response | u
   const path = url.pathname;
   if (
     path.startsWith('/assets') ||
+    path === '/manifest.json' ||
     path.endsWith('.js') ||
     path.endsWith('.css') ||
+    path.endsWith('.json') ||
     path.endsWith('.svg') ||
     path.endsWith('.png') ||
     path.endsWith('.ico') ||
