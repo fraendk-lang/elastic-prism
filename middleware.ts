@@ -10,6 +10,20 @@ export const config = {
 
 const COOKIE_NAME = 'eu-auth';
 
+function grantAccess(path: string): Response {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: path || '/',
+      'Set-Cookie': `${COOKIE_NAME}=granted; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}; Path=/`,
+    },
+  });
+}
+
+function isDemoBypass(url: URL): boolean {
+  return url.searchParams.get('demo') === '1' || url.searchParams.get('embed') === '1';
+}
+
 function getPasswordPage(error = false) {
   const errorHtml = error ? '<p class="error">Incorrect password</p>' : '';
   return `<!DOCTYPE html>
@@ -41,6 +55,8 @@ function getPasswordPage(error = false) {
     }
     button:hover { opacity: 0.85; }
     .error { color: #f87171; font-size: 12px; margin-top: 12px; margin-bottom: 0; }
+    .demo-link { display: block; margin-top: 20px; font-size: 13px; color: #888; text-decoration: none; }
+    .demo-link:hover { color: #D4A537; }
   </style>
 </head>
 <body>
@@ -58,6 +74,7 @@ function getPasswordPage(error = false) {
       <input type="password" id="gatePasswordInput" placeholder="Password" autofocus required autocomplete="current-password" />
       <button type="submit">Enter</button>
     </form>
+    <a class="demo-link" href="/?demo=1">Try demo without password →</a>
     <script>
       document.getElementById('gateForm').addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -106,6 +123,10 @@ export default async function middleware(request: Request): Promise<Response | u
   const hasAuth = cookies.split(';').some(c => c.trim().startsWith(`${COOKIE_NAME}=granted`));
   if (hasAuth) return;
 
+  if (isDemoBypass(url)) {
+    return grantAccess(path || '/');
+  }
+
   let submitted: string | null | undefined;
   if (request.method === 'POST') {
     try {
@@ -119,13 +140,7 @@ export default async function middleware(request: Request): Promise<Response | u
   }
 
   if (submitted === password) {
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: path || '/',
-        'Set-Cookie': `${COOKIE_NAME}=granted; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}; Path=/`,
-      },
-    });
+    return grantAccess(path || '/');
   }
 
   const hasError = submitted !== undefined && submitted !== null && submitted !== password;
